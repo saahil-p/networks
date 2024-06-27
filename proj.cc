@@ -34,9 +34,11 @@ void
 CalculateThroughput()
 {
     Time now = Simulator::Now(); /* Return the simulator's virtual time. */
-    double cur = (sink->GetTotalRx() - lastTotalRx) * 8.0 /
-                 1e6; /* Convert Application RX Packets to MBits. */
+    double cur = (sink->GetTotalRx() - lastTotalRx) * 8.0 /1e3; /* Convert Application RX Packets to MBits. */
+                
     throughputFile << now.GetSeconds() << "\t" << cur << std::endl;
+    
+
     lastTotalRx = sink->GetTotalRx();
     Simulator::Schedule(MilliSeconds(1000), &CalculateThroughput);
 }
@@ -44,8 +46,8 @@ CalculateThroughput()
 int
 main(int argc, char *argv[]){
 
-    uint32_t payloadSize{32768};           /* Transport layer payload size in bytes. */
-    DataRate dataRate{"100Mb/s"};         /* Application layer datarate. */
+    uint32_t payloadSize{1270};           /* Transport layer payload size in bytes. */
+    DataRate dataRate{"41.76Kb/s"};         /* Application layer datarate. */
     std::string tcpVariant{"TcpIllinois"}; /* TCP variant type. */
     std::string phyRate{"HtMcs7"};        /* Physical layer bitrate. */
     Time simulationTime{"300s"};           /* Simulation time. */
@@ -65,7 +67,7 @@ main(int argc, char *argv[]){
     cmd.AddValue("phyRate", "Physical layer bitrate", phyRate);
     cmd.AddValue("simulationTime", "Simulation time in seconds", simulationTime);
     cmd.AddValue("pcap", "Enable/disable PCAP Tracing", pcapTracing);
-    cmd.AddValue("topo","Topology to be used : Grid, Circle,Ellipse",topo);
+    cmd.AddValue("topo","Topology to be used : Grid, Circle,Ellipse,SmartHome",topo);
     cmd.AddValue("mobility","Mobility to be used : 00 01 10 11",mobility);
     cmd.Parse(argc, argv);
     std::string tcpName = tcpVariant;
@@ -278,9 +280,9 @@ main(int argc, char *argv[]){
     throughputFile.close();
     
     auto averageThroughput =
-        (static_cast<double>(sink->GetTotalRx() * 8) / simulationTime.GetMicroSeconds());
+        (static_cast<double>(sink->GetTotalRx() * 8 * 1e3) / simulationTime.GetMicroSeconds());
     
-    std::cout << "\nAverage throughput: " << averageThroughput << " Mbit/s" << std::endl;
+    std::cout << "\nAverage throughput: " << averageThroughput << " Kbit/s" << std::endl;
     
     //Flow monitor code
     monitor->CheckForLostPackets();
