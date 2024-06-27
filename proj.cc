@@ -46,12 +46,12 @@ main(int argc, char *argv[]){
 
     uint32_t payloadSize{32768};           /* Transport layer payload size in bytes. */
     DataRate dataRate{"100Mb/s"};         /* Application layer datarate. */
-    std::string tcpVariant{"TcpBic"}; /* TCP variant type. */
+    std::string tcpVariant{"TcpIllinois"}; /* TCP variant type. */
     std::string phyRate{"HtMcs7"};        /* Physical layer bitrate. */
     Time simulationTime{"300s"};           /* Simulation time. */
     bool pcapTracing{false};              /* PCAP Tracing is enabled or not. */
-    std::string topo{"Ellipse"};		  /* network topology in use */
-    std::string mobility{"10"};			/*Set the mobility model of the server-MSB and client-LSB*/
+    std::string topo{"Grid"};		  /* network topology in use */
+    std::string mobility{"01"};			/*Set the mobility model of the server-MSB and client-LSB*/
 
     /* Command line argument parser setup. */
     CommandLine cmd(__FILE__);
@@ -118,21 +118,31 @@ main(int argc, char *argv[]){
     MobilityHelper staMobility;
     MobilityHelper apMobility;
     
+    std::string mm;
+    
     if(mobility == "00"){
     	staMobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
     	apMobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+    	
+    	mm = "ss";
     }
     else if(mobility == "01"){
     	staMobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
     	apMobility.SetMobilityModel("ns3::RandomDirection2dMobilityModel");
+    	
+    	mm = "sd";
     }
     else if(mobility == "10"){
     	apMobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
     	staMobility.SetMobilityModel("ns3::RandomDirection2dMobilityModel");
+    	
+    	mm = "ds";
     }
     else if(mobility == "11"){
     	staMobility.SetMobilityModel("ns3::RandomDirection2dMobilityModel");
     	apMobility.SetMobilityModel("ns3::RandomDirection2dMobilityModel");
+    	
+    	mm = "dd";
     }
     if(topo == "Grid"){
     	staMobility.SetPositionAllocator("ns3::GridPositionAllocator",
@@ -228,7 +238,7 @@ main(int argc, char *argv[]){
     FlowMonitorHelper flowmon;
     Ptr<FlowMonitor> monitor = flowmon.InstallAll();
     
-    std :: string throughputFileName = "throughput_" + tcpName + std :: string {".txt"};
+    std :: string throughputFileName = "throughput/throughput_" + tcpName + "_" + mm + "_" +topo+ std:: string {".txt"};
     
     throughputFile.open(throughputFileName);
     AnimationInterface anim("proj_netanim.xml");
@@ -250,15 +260,10 @@ main(int argc, char *argv[]){
     
 
     
-    
-    
-    std::cout<<"x: " << apx <<"\ty:" << apy << "\n";
-    
     for(int i = 0; i < 10; i++){
     	Ptr<MobilityModel> mob = staWifiNodes.Get(i)->GetObject<MobilityModel>();
     	double x = mob->GetPosition().x;
     	double y = mob->GetPosition().y;
-    	std :: cout << "x:" << x << "\ty:" << y <<"\n";
     	
     	anim.SetConstantPosition(staWifiNodes.Get(i),x,y);
     }
@@ -284,7 +289,7 @@ main(int argc, char *argv[]){
 
     std::ofstream flowStatsFile;
     
-    std::string flowFileName = "flow_stats_" + tcpName + ".txt";
+    std::string flowFileName = "flowstats/flow_stats_" + tcpName + "_" + mm + "_" + topo+ ".txt";
      
     flowStatsFile.open(flowFileName);
     
