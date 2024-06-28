@@ -103,14 +103,18 @@ main(int argc, char *argv[]){
                                        StringValue("HtMcs0"));
                                        
                                        
-    NodeContainer staWifiNodes;
-    staWifiNodes.Create(10);
+    //NodeContainer staWifiNodes;
+    //staWifiNodes.Create(10);
+    
     NodeContainer apWifiNode;
     apWifiNode.Create(1);
+    
     NodeContainer smartTvNodes;
     smartTvNodes.Create(2); //payload size of between 2 - 5 MB/s
+    
     NodeContainer smartLightNodes;
     smartLightNodes.Create(18); //payload size of between 20 & 500 bytes
+   
     NodeContainer smartAcNodes;
     smartAcNodes.Create(4); // Payload size of between 100 & 1000 bytes
     
@@ -123,8 +127,8 @@ main(int argc, char *argv[]){
     apDevice = wifiHelper.Install(wifiPhy, wifiMac, apWifiNode);
     
     wifiMac.SetType("ns3::StaWifiMac","Ssid",SsidValue(ssid));
-    NetDeviceContainer staDevices;
-    staDevices = wifiHelper.Install(wifiPhy,wifiMac,staWifiNodes);
+    //NetDeviceContainer staDevices;
+    //staDevices = wifiHelper.Install(wifiPhy,wifiMac,staWifiNodes);
     NetDeviceContainer smartTvDevices;
     smartTvDevices = wifiHelper.Install(wifiPhy,wifiMac,smartTvNodes);
     NetDeviceContainer smartLightDevices;
@@ -139,11 +143,15 @@ main(int argc, char *argv[]){
     MobilityHelper tvMobility;
     MobilityHelper acMobility;
     MobilityHelper phoneMobility;
+    MobilityHelper lightMobility;
     
+    apMobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
     tvMobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
     acMobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+    lightMobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
     phoneMobility.SetMobilityModel("ns3::RandomDirection2dMobilityModel");
-    
+   
+   /* 
     std::string mm;
     
     if(mobility == "00"){
@@ -170,6 +178,43 @@ main(int argc, char *argv[]){
     	
     	mm = "dd";
     }
+    */
+    
+    
+    //Creating a smart home topology
+    
+    Ptr<ListPositionAllocator> tvPositionAlloc = CreateObject<ListPositionAllocator>();
+    tvPositionAlloc->Add(Vector(40.0,80.0,0.0));
+    tvPositionAlloc->Add(Vector(-40.0,20.0,0.0));
+    tvMobility.SetPositionAllocator(tvPositionAlloc);
+    tvMobility.Install(smartTvNodes);
+    
+    Ptr<ListPositionAllocator> acPositionAlloc = CreateObject<ListPositionAllocator>();
+    acPositionAlloc->Add(Vector(20.0,100.0,0.0));
+    acPositionAlloc->Add(Vector(-40.0,30.0,0.0));
+    acPositionAlloc->Add(Vector(40.0,20.0,0.0));
+    acPositionAlloc->Add(Vector(40.0,60.0,0.0));
+    acMobility.SetPositionAllocator(acPositionAlloc);
+    acMobility.Install(smartAcNodes);
+    
+    
+    lightMobility.SetPositionAllocator("ns3::GridPositionAllocator","MinX",DoubleValue(-20.0),"MinY",DoubleValue(0.0),"DeltaX", DoubleValue(20.0),"DeltaY",DoubleValue(20.0),"GridWidth",UintegerValue(4),"LayoutType",StringValue("RowFirst"));
+    lightMobility.Install(smartLightNodes);
+    
+    phoneMobility.SetPositionAllocator("ns3::GridPositionAllocator","MinX",DoubleValue(10.0),"MinY",DoubleValue(20.0),"DeltaX", DoubleValue(20.0),"DeltaY",DoubleValue(40.0),"GridWidth",UintegerValue(3),"LayoutType",StringValue("RowFirst"));
+    phoneMobility.Install(smartPhoneNodes);
+    
+    Ptr<ListPositionAllocator> apPositionAlloc = CreateObject<ListPositionAllocator>();
+    apPositionAlloc->Add(Vector(0.0,50.0,0.0));
+    apMobility.SetPositionAllocator(apPositionAlloc);
+    apMobility.Install(apWifiNode);
+    
+    
+    
+    
+    
+    
+    /*
     if(topo == "Grid"){
     	staMobility.SetPositionAllocator("ns3::GridPositionAllocator",
                                  	 "MinX", DoubleValue(0.0),
@@ -236,16 +281,32 @@ main(int argc, char *argv[]){
     	apMobility.Install(apWifiNode);
     }
     
+    */
+    
     InternetStackHelper stack;
-    stack.Install(staWifiNodes);
+    //stack.Install(staWifiNodes);
     stack.Install(apWifiNode);
-   
+    stack.Install(smartTvNodes);
+    stack.Install(smartAcNodes);
+    stack.Install(smartLightNodes);
+    stack.Install(smartPhoneNodes);
+    
+    
     Ipv4AddressHelper address;
     address.SetBase("192.168.0.0", "255.255.255.0");
     Ipv4InterfaceContainer apInterface;
     apInterface = address.Assign(apDevice);
-    Ipv4InterfaceContainer staInterface;
-    staInterface = address.Assign(staDevices);
+    //Ipv4InterfaceContainer staInterface;
+    //staInterface = address.Assign(staDevices);
+    
+    Ipv4InterfaceContainer tvInterface;
+    tvInterface = address.Assign(smartTvDevices);
+    Ipv4InterfaceContainer acInterface;
+    acInterface = address.Assign(smartAcDevices);
+    Ipv4InterfaceContainer lightInterface;
+    lightInterface = address.Assign(smartLightDevices);
+    Ipv4InterfaceContainer phoneInterface;
+    phoneInterface = address.Assign(smartPhoneDevices);
     
     Ipv4GlobalRoutingHelper::PopulateRoutingTables();
     
@@ -253,18 +314,39 @@ main(int argc, char *argv[]){
     ApplicationContainer sinkApp = sinkHelper.Install(apWifiNode);
     sink = StaticCast<PacketSink>(sinkApp.Get(0));
     
-    OnOffHelper server("ns3::TcpSocketFactory", (InetSocketAddress(apInterface.GetAddress(0), 9)));
-    server.SetAttribute("PacketSize", UintegerValue(payloadSize));
-    server.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
-    server.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0]"));
-    server.SetAttribute("DataRate", DataRateValue(DataRate(dataRate)));
-    ApplicationContainer serverApp = server.Install(staWifiNodes);
+    OnOffHelper tvServer("ns3::TcpSocketFactory", (InetSocketAddress(apInterface.GetAddress(0), 9)));
+    tvServer.SetAttribute("PacketSize", UintegerValue(4194304));
+    tvServer.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
+    tvServer.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0]"));
+    tvServer.SetAttribute("DataRate", DataRateValue(DataRate("2Mb/s")));
+    ApplicationContainer tvServerApp = tvServer.Install(smartTvNodes);
+    
+    OnOffHelper acServer("ns3::TcpSocketFactory", (InetSocketAddress(apInterface.GetAddress(0), 9)));
+    acServer.SetAttribute("PacketSize", UintegerValue(700));
+    acServer.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
+    acServer.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0]"));
+    acServer.SetAttribute("DataRate", DataRateValue(DataRate("50Kb/s")));
+    ApplicationContainer acServerApp = acServer.Install(smartAcNodes);
+    
+    OnOffHelper lightServer("ns3::TcpSocketFactory", (InetSocketAddress(apInterface.GetAddress(0), 9)));
+    lightServer.SetAttribute("PacketSize", UintegerValue(300));
+    lightServer.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
+    lightServer.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0]"));
+    lightServer.SetAttribute("DataRate", DataRateValue(DataRate("7Kb/s")));
+    ApplicationContainer lightServerApp = lightServer.Install(smartLightNodes);
+    
+    OnOffHelper phoneServer("ns3::TcpSocketFactory", (InetSocketAddress(apInterface.GetAddress(0), 9)));
+    phoneServer.SetAttribute("PacketSize", UintegerValue(1500));
+    phoneServer.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
+    phoneServer.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0]"));
+    phoneServer.SetAttribute("DataRate", DataRateValue(DataRate("4Mb/s")));
+    ApplicationContainer phoneServerApp = phoneServer.Install(smartPhoneNodes);
     
     
     FlowMonitorHelper flowmon;
     Ptr<FlowMonitor> monitor = flowmon.InstallAll();
     
-    std :: string throughputFileName = "throughput/throughput_" + tcpName + "_" + mm + "_" +topo+ std:: string {".txt"};
+    std :: string throughputFileName = "throughput/throughput_" + tcpName + std:: string {".txt"};
     
     throughputFile.open(throughputFileName);
     AnimationInterface anim("proj_netanim.xml");
@@ -279,19 +361,46 @@ main(int argc, char *argv[]){
     
     
     sinkApp.Start(Seconds(0.0));
-    serverApp.Start(Seconds(1.0));
+    tvServerApp.Start(Seconds(1.0));
+    acServerApp.Start(Seconds(1.0));
+    lightServerApp.Start(Seconds(1.0));
+    phoneServerApp.Start(Seconds(1.0));
    
     
     Simulator::Schedule(Seconds(1.1), &CalculateThroughput);
     
 
     
-    for(int i = 0; i < 10; i++){
-    	Ptr<MobilityModel> mob = staWifiNodes.Get(i)->GetObject<MobilityModel>();
+    for(int i = 0; i < 2; i++){
+    	Ptr<MobilityModel> mob = smartTvNodes.Get(i)->GetObject<MobilityModel>();
     	double x = mob->GetPosition().x;
     	double y = mob->GetPosition().y;
     	
-    	anim.SetConstantPosition(staWifiNodes.Get(i),x,y);
+    	anim.SetConstantPosition(smartTvNodes.Get(i),x,y);
+    }
+    
+    for(int i = 0; i < 18; i++){
+    	Ptr<MobilityModel> mob = smartLightNodes.Get(i)->GetObject<MobilityModel>();
+    	double x = mob->GetPosition().x;
+    	double y = mob->GetPosition().y;
+    	
+    	anim.SetConstantPosition(smartLightNodes.Get(i),x,y);
+    }
+    
+    for(int i = 0; i < 4 ; i++){
+    	Ptr<MobilityModel> mob = smartAcNodes.Get(i)->GetObject<MobilityModel>();
+    	double x = mob->GetPosition().x;
+    	double y = mob->GetPosition().y;
+    	
+    	anim.SetConstantPosition(smartAcNodes.Get(i),x,y);
+    }
+    
+    for(int i = 0; i < 4; i++){
+    	Ptr<MobilityModel> mob = smartPhoneNodes.Get(i)->GetObject<MobilityModel>();
+    	double x = mob->GetPosition().x;
+    	double y = mob->GetPosition().y;
+    	
+    	anim.SetConstantPosition(smartPhoneNodes.Get(i),x,y);
     }
 
 
@@ -315,7 +424,7 @@ main(int argc, char *argv[]){
 
     std::ofstream flowStatsFile;
     
-    std::string flowFileName = "flowstats/flow_stats_" + tcpName + "_" + mm + "_" + topo+ ".txt";
+    std::string flowFileName = "flowstats/flow_stats_" + tcpName + ".txt";
      
     flowStatsFile.open(flowFileName);
     
