@@ -35,7 +35,7 @@ void
 CalculateThroughput()
 {
     Time now = Simulator::Now(); /* Return the simulator's virtual time. */
-    double cur = (sink->GetTotalRx() - lastTotalRx) * 8.0 /1e6; /* Convert Application RX Packets to MBits. */
+    double cur = (sink->GetTotalRx() - lastTotalRx) * 8.0 /1e3; /* Convert Application RX Packets to MBits. */
                 
     throughputFile << now.GetSeconds() << "\t" << cur << std::endl;
     
@@ -46,20 +46,12 @@ CalculateThroughput()
 
 int
 main(int argc, char *argv[]){
-
-    uint32_t payloadSize{1270};           /* Transport layer payload size in bytes. */
-    DataRate dataRate{"41.76Kb/s"};         /* Application layer datarate. */
-    std::string tcpVariant{"TcpVegas"}; /* TCP variant type. */
+    std::string tcpVariant{"TcpVeno"}; /* TCP variant type. */
     std::string phyRate{"HtMcs7"};        /* Physical layer bitrate. */
     Time simulationTime{"300s"};           /* Simulation time. */
-    bool pcapTracing{false};              /* PCAP Tracing is enabled or not. */
-    std::string topo{"Grid"};		  /* network topology in use */
-    std::string mobility{"01"};			/*Set the mobility model of the server-MSB and client-LSB*/
 
     /* Command line argument parser setup. */
     CommandLine cmd(__FILE__);
-    cmd.AddValue("payloadSize", "Payload size in bytes", payloadSize);
-    cmd.AddValue("dataRate", "Application data ate", dataRate);
     cmd.AddValue("tcpVariant",
                  "Transport protocol to use: TcpNewReno, "
                  "TcpHybla, TcpHighSpeed, TcpHtcp, TcpVegas, TcpScalable, TcpVeno, "
@@ -67,9 +59,6 @@ main(int argc, char *argv[]){
                  tcpVariant);
     cmd.AddValue("phyRate", "Physical layer bitrate", phyRate);
     cmd.AddValue("simulationTime", "Simulation time in seconds", simulationTime);
-    cmd.AddValue("pcap", "Enable/disable PCAP Tracing", pcapTracing);
-    cmd.AddValue("topo","Topology to be used : Grid, Circle,Ellipse",topo);
-    cmd.AddValue("mobility","Mobility to be used : 00 01 10 11",mobility);
     cmd.Parse(argc, argv);
     std::string tcpName = tcpVariant;
 
@@ -82,7 +71,7 @@ main(int argc, char *argv[]){
                        TypeIdValue(TypeId::LookupByName(tcpVariant)));
 
     /* Configure TCP Options */
-    Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(payloadSize));
+    // Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(payloadSize));
     
     WifiMacHelper wifiMac;
     WifiHelper wifiHelper;
@@ -97,6 +86,7 @@ main(int argc, char *argv[]){
     YansWifiPhyHelper wifiPhy;
     wifiPhy.SetChannel(wifiChannel.Create());
     wifiPhy.SetErrorRateModel("ns3::YansErrorRateModel");
+    wifiPhy.Set("RxGain",DoubleValue(230));
     wifiHelper.SetRemoteStationManager("ns3::ConstantRateWifiManager",
                                        "DataMode",
                                        StringValue(phyRate),
@@ -106,9 +96,9 @@ main(int argc, char *argv[]){
 
     NodeContainer apWifiNode;
     apWifiNode.Create(1);
-    
+    int number_of_vehicles = 100;
     NodeContainer smartVehicleNodes;
-    smartVehicleNodes.Create(30);
+    smartVehicleNodes.Create(number_of_vehicles);
     
     Ssid ssid = Ssid("network");
     wifiMac.SetType("ns3::ApWifiMac", "Ssid", SsidValue(ssid));
@@ -130,13 +120,13 @@ main(int argc, char *argv[]){
     
     
     smartVehicleMobility.Install(smartVehicleNodes);
-    for(int i = 0; i < 15; i++){
+    for(int i = 0; i < number_of_vehicles/2; i++){
     	Ptr<Node> node = smartVehicleNodes.Get(i);
     	Ptr<ConstantVelocityMobilityModel> mob = node->GetObject <ConstantVelocityMobilityModel>();
     	mob->SetVelocity(Vector(1.0,0.0,0.0));
     }
     
-    for(int i  = 15; i < 30; i++){
+    for(int i  = number_of_vehicles/2; i < number_of_vehicles; i++){
     	Ptr<Node> node = smartVehicleNodes.Get(i);
     	Ptr<ConstantVelocityMobilityModel> mob = node->GetObject <ConstantVelocityMobilityModel>();
     	mob->SetVelocity(Vector(-1.0,0.0,0.0));
@@ -146,7 +136,7 @@ main(int argc, char *argv[]){
     
     MobilityHelper apMobility;
     Ptr<ListPositionAllocator> apPositionAlloc = CreateObject<ListPositionAllocator>();
-    apPositionAlloc->Add(Vector(0.0,0.0,0.0));
+    apPositionAlloc->Add(Vector(70.0,10.0,0.0));
     apMobility.SetPositionAllocator(apPositionAlloc);
     apMobility.Install(apWifiNode);
    
@@ -206,6 +196,7 @@ main(int argc, char *argv[]){
     double apy = apmob->GetPosition().y;
     
     anim.SetConstantPosition(apWifiNode.Get(0),apx,apy);
+    anim.UpdateNodeColor(apWifiNode.Get(0),0,0,255);
     
     
     sinkApp.Start(Seconds(0.0));
@@ -216,11 +207,12 @@ main(int argc, char *argv[]){
     
     Simulator::Schedule(Seconds(1.1), &CalculateThroughput);
     
-    for(int i = 0; i < 30; i++){
+    for(int i = 0; i < number_of_vehicles; i++){
     	Ptr<MobilityModel> mob = smartVehicleNodes.Get(i)->GetObject<MobilityModel>();
     	double x = mob->GetPosition().x;
     	double y = mob->GetPosition().y;
     	anim.SetConstantPosition(smartVehicleNodes.Get(i),x,y);
+        anim.UpdateNodeColor(smartVehicleNodes.Get(i),0,255,0);
     }
     
     
@@ -232,9 +224,9 @@ main(int argc, char *argv[]){
     throughputFile.close();
     
     auto averageThroughput =
-        (static_cast<double>(sink->GetTotalRx() * 8) / simulationTime.GetMicroSeconds());
+        (static_cast<double>(sink->GetTotalRx() * 8 * 1e3) / simulationTime.GetMicroSeconds());
     
-    std::cout << "\nAverage throughput: " << averageThroughput << " Mbit/s" << std::endl;
+    std::cout << "\nAverage throughput: " << averageThroughput << " Kbit/s" << std::endl;
     
     //Flow monitor code
     monitor->CheckForLostPackets();
