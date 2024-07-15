@@ -35,7 +35,7 @@ void
 CalculateThroughput()
 {
     Time now = Simulator::Now(); /* Return the simulator's virtual time. */
-    double cur = (sink->GetTotalRx() - lastTotalRx) * 8.0 /1e3; /* Convert Application RX Packets to MBits. */
+    double cur = (sink->GetTotalRx() - lastTotalRx) * 8.0 /1e6; /* Convert Application RX Packets to MBits. */
                 
     throughputFile << now.GetSeconds() << "\t" << cur << std::endl;
     
@@ -46,7 +46,7 @@ CalculateThroughput()
 
 int
 main(int argc, char *argv[]){
-    std::string tcpVariant{"TcpVeno"}; /* TCP variant type. */
+    std::string tcpVariant{"TcpLedbat"}; /* TCP variant type. */
     std::string phyRate{"HtMcs7"};        /* Physical layer bitrate. */
     Time simulationTime{"300s"};           /* Simulation time. */
 
@@ -86,7 +86,6 @@ main(int argc, char *argv[]){
     YansWifiPhyHelper wifiPhy;
     wifiPhy.SetChannel(wifiChannel.Create());
     wifiPhy.SetErrorRateModel("ns3::YansErrorRateModel");
-    wifiPhy.Set("RxGain",DoubleValue(230));
     wifiHelper.SetRemoteStationManager("ns3::ConstantRateWifiManager",
                                        "DataMode",
                                        StringValue(phyRate),
@@ -136,7 +135,7 @@ main(int argc, char *argv[]){
     
     MobilityHelper apMobility;
     Ptr<ListPositionAllocator> apPositionAlloc = CreateObject<ListPositionAllocator>();
-    apPositionAlloc->Add(Vector(70.0,10.0,0.0));
+    apPositionAlloc->Add(Vector(0.0,10.0,0.0));
     apMobility.SetPositionAllocator(apPositionAlloc);
     apMobility.Install(apWifiNode);
    
@@ -146,7 +145,7 @@ main(int argc, char *argv[]){
     stack.Install(smartVehicleNodes);
     
     Ipv4AddressHelper address;
-    address.SetBase("192.168.0.0", "255.255.255.0");
+    address.SetBase("192.168.0.0", "255.255.0.0");
     Ipv4InterfaceContainer apInterface;
     apInterface = address.Assign(apDevice);
     Ipv4InterfaceContainer smartVehicleInterface;
@@ -162,21 +161,21 @@ main(int argc, char *argv[]){
     smallPktServer.SetAttribute("PacketSize", UintegerValue(100));
     smallPktServer.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
     smallPktServer.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
-    smallPktServer.SetAttribute("DataRate", DataRateValue(DataRate("800b/s")));
+    smallPktServer.SetAttribute("DataRate", DataRateValue(DataRate("100Kb/s")));
     ApplicationContainer smallPktServerApp = smallPktServer.Install(smartVehicleNodes);
     
     OnOffHelper midPktServer("ns3::TcpSocketFactory", (InetSocketAddress(apInterface.GetAddress(0), 9)));
     midPktServer.SetAttribute("PacketSize", UintegerValue(200));
     midPktServer.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
     midPktServer.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=10]"));
-    midPktServer.SetAttribute("DataRate", DataRateValue(DataRate("1600b/s")));
+    midPktServer.SetAttribute("DataRate", DataRateValue(DataRate("2Mb/s")));
     ApplicationContainer midPktServerApp = midPktServer.Install(smartVehicleNodes);
     
     OnOffHelper largePktServer("ns3::TcpSocketFactory", (InetSocketAddress(apInterface.GetAddress(0), 9)));
     largePktServer.SetAttribute("PacketSize", UintegerValue(3000));
     largePktServer.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
     largePktServer.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=25]"));
-    largePktServer.SetAttribute("DataRate", DataRateValue(DataRate("24000b/s")));
+    largePktServer.SetAttribute("DataRate", DataRateValue(DataRate("100Mb/s")));
     ApplicationContainer largePktServerApp = largePktServer.Install(smartVehicleNodes);
     
     
@@ -216,7 +215,7 @@ main(int argc, char *argv[]){
     }
     
     
-    Simulator::Stop(Seconds(300));
+    Simulator::Stop(simulationTime);
     Simulator :: Run();
     
 
@@ -224,9 +223,9 @@ main(int argc, char *argv[]){
     throughputFile.close();
     
     auto averageThroughput =
-        (static_cast<double>(sink->GetTotalRx() * 8 * 1e3) / simulationTime.GetMicroSeconds());
+        (static_cast<double>(sink->GetTotalRx() * 8  ) / simulationTime.GetMicroSeconds());
     
-    std::cout << "\nAverage throughput: " << averageThroughput << " Kbit/s" << std::endl;
+    std::cout << "\nAverage throughput: " << averageThroughput << " Mbit/s" << std::endl;
     
     //Flow monitor code
     monitor->CheckForLostPackets();
