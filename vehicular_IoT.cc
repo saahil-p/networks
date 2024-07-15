@@ -96,7 +96,7 @@ main(int argc, char *argv[]){
 
     NodeContainer apWifiNode;
     apWifiNode.Create(1);
-    int number_of_vehicles = 100;
+    int number_of_vehicles = 30;
     NodeContainer smartVehicleNodes;
     smartVehicleNodes.Create(number_of_vehicles);
     
