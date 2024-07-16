@@ -114,7 +114,7 @@ main(int argc, char *argv[]){
                                        
 
     NodeContainer apWifiNode;
-    apWifiNode.Create(1);
+    apWifiNode.Create(2);
     int number_of_vehicles = 30;
     NodeContainer smartVehicleNodes;
     smartVehicleNodes.Create(number_of_vehicles);
@@ -171,6 +171,9 @@ main(int argc, char *argv[]){
     Ipv4InterfaceContainer smartVehicleInterface;
     smartVehicleInterface = address.Assign(smartVehicleDevices);
     
+    
+
+    
     Ipv4GlobalRoutingHelper::PopulateRoutingTables();
     
     PacketSinkHelper sinkHelper("ns3::TcpSocketFactory",InetSocketAddress(InetSocketAddress(Ipv4Address::GetAny(), 9)));
@@ -225,8 +228,14 @@ main(int argc, char *argv[]){
     
     BasicEnergySourceHelper basicSourceHelper;
     basicSourceHelper.Set("BasicEnergySourceInitialEnergyJ", DoubleValue(1000.0));
+    basicSourceHelper.Set("BasicEnergySupplyVoltageV", DoubleValue(12.0));
     
     WifiRadioEnergyModelHelper radioEnergyHelper;
+    
+    radioEnergyHelper.Set("TxCurrentA",DoubleValue(0.017));
+    radioEnergyHelper.Set("RxCurrentA",DoubleValue(0.0197));
+    radioEnergyHelper.Set("IdleCurrentA",DoubleValue(0.273));
+    radioEnergyHelper.Set("SleepCurrentA",DoubleValue(0.033));
     
     ns3::energy::EnergySourceContainer sources = basicSourceHelper.Install(smartVehicleNodes);
     ns3::energy::DeviceEnergyModelContainer deviceModels = radioEnergyHelper.Install(smartVehicleDevices, sources);
@@ -238,10 +247,16 @@ main(int argc, char *argv[]){
     
     Simulator::Schedule(Seconds(1.1), &CalculateThroughput);
     
+    
+    
     for(int i = 0; i < number_of_vehicles; i++){
     	Ptr<MobilityModel> mob = smartVehicleNodes.Get(i)->GetObject<MobilityModel>();
     	double x = mob->GetPosition().x;
     	double y = mob->GetPosition().y;
+    	if(x > 5 || y >5){
+    		smallPktServer.SetAttribute("Remote",AddressValue (InetSocketAddress (apInterface.GetAddress (0), 9)));
+    		std::cout << "Small server migrated" << std::endl;;
+    	}
     	anim.SetConstantPosition(smartVehicleNodes.Get(i),x,y);
         anim.UpdateNodeColor(smartVehicleNodes.Get(i),0,255,0);
     }
