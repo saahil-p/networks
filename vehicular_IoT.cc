@@ -164,6 +164,8 @@ main(int argc, char *argv[]){
     stack.Install(apWifiNode);
     stack.Install(smartVehicleNodes);
     
+  
+    
     Ipv4AddressHelper address;
     address.SetBase("192.168.0.0", "255.255.0.0");
     Ipv4InterfaceContainer apInterface;
