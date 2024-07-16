@@ -20,6 +20,9 @@
 #include "ns3/ipv4-flow-classifier.h"
 #include "ns3/netanim-module.h"
 #include "ns3/constant-velocity-mobility-model.h"
+#include "ns3/energy-module.h"
+#include "ns3/wifi-radio-energy-model-helper.h"
+
 
 #include <fstream>
 
@@ -30,6 +33,9 @@ using namespace ns3;
 Ptr<PacketSink> sink;
 uint64_t lastTotalRx = 0;
 std::ofstream throughputFile;
+double totalEnergyConsumed = 0.0;
+std::vector<double> nodeEnergyConsumed;
+
 
 void
 CalculateThroughput()
@@ -43,12 +49,26 @@ CalculateThroughput()
     lastTotalRx = sink->GetTotalRx();
     Simulator::Schedule(MilliSeconds(1000), &CalculateThroughput);
 }
+void CalculateEnergyConsumption(NodeContainer smartVehicleNodes) {
+    totalEnergyConsumed = 0.0;
+    for (size_t i = 0; i < nodeEnergyConsumed.size(); ++i) {
+        Ptr<ns3::energy::BasicEnergySource> energySource = DynamicCast<ns3::energy::BasicEnergySource>(smartVehicleNodes.Get(i)->GetObject<ns3::energy::EnergySourceContainer>()->Get(0));
+        if (energySource) {
+            nodeEnergyConsumed[i] = energySource->GetInitialEnergy() - energySource->GetRemainingEnergy();
+            totalEnergyConsumed += nodeEnergyConsumed[i];
+        } else {
+            NS_LOG_WARN("Energy source not found for node " << i);
+        }
+    }
+    Simulator::Schedule(Seconds(1.0), &CalculateEnergyConsumption, smartVehicleNodes);
+}
+
 
 int
 main(int argc, char *argv[]){
     std::string tcpVariant{"TcpLedbat"}; /* TCP variant type. */
     std::string phyRate{"HtMcs7"};        /* Physical layer bitrate. */
-    Time simulationTime{"300s"};           /* Simulation time. */
+    Time simulationTime{"10s"};           /* Simulation time. */
 
     /* Command line argument parser setup. */
     CommandLine cmd(__FILE__);
@@ -202,6 +222,18 @@ main(int argc, char *argv[]){
     smallPktServerApp.Start(Seconds(1.1));
     midPktServerApp.Start(Seconds(1.2));
     largePktServerApp.Start(Seconds(1.3));
+    
+    BasicEnergySourceHelper basicSourceHelper;
+    basicSourceHelper.Set("BasicEnergySourceInitialEnergyJ", DoubleValue(1000.0));
+    
+    WifiRadioEnergyModelHelper radioEnergyHelper;
+    
+    ns3::energy::EnergySourceContainer sources = basicSourceHelper.Install(smartVehicleNodes);
+    ns3::energy::DeviceEnergyModelContainer deviceModels = radioEnergyHelper.Install(smartVehicleDevices, sources);
+
+    nodeEnergyConsumed.resize(smartVehicleNodes.GetN(), 0.0);
+
+    Simulator::Schedule(Seconds(1.0), &CalculateEnergyConsumption,smartVehicleNodes);
    
     
     Simulator::Schedule(Seconds(1.1), &CalculateThroughput);
@@ -218,7 +250,8 @@ main(int argc, char *argv[]){
     Simulator::Stop(simulationTime);
     Simulator :: Run();
     
-
+	double averageEnergyConsumption = totalEnergyConsumed / smartVehicleNodes.GetN();
+    std::cout << "Average energy consumption: " << averageEnergyConsumption << " J" << std::endl;
     
     throughputFile.close();
     
@@ -274,32 +307,17 @@ main(int argc, char *argv[]){
     pktStatsFile.close();
    
     Simulator :: Destroy();
-
-    std:: string opName{std::string("throughput") + tcpName + std::string(".png")};
     
-    // Generate gnuplot scripts
-    std::ofstream gnuplotScript;
-    std ::string("throughput") + tcpVariant + std::string(".plt");
-    gnuplotScript.open("plot_throughput.plt");
-    gnuplotScript << "set terminal png size 800,600\n";
-    gnuplotScript << "set output '" << opName << "'\n";
-    gnuplotScript << "set title 'Throughput Over Time'\n";
-    gnuplotScript << "set xlabel 'Time (s)'\n";
-    gnuplotScript << "set ylabel 'Throughput (Mbit/s)'\n";
-    gnuplotScript << "plot '" <<throughputFileName <<"' using 1:2 with lines title 'Throughput '" << opName << " \n";
-    gnuplotScript.close();
+    std::string energyStats = "energystats/energy_"+tcpName+".txt";
     
-    gnuplotScript.open("plot_flow_stats.plt");
-    gnuplotScript << "set terminal png size 800,600\n";
-    gnuplotScript << "set output 'flow_stats.png'\n";
-    gnuplotScript << "set title 'Flow Statistics'\n";
-    gnuplotScript << "set xlabel 'Flow ID'\n";
-    gnuplotScript << "set ylabel 'Bytes'\n";
-    gnuplotScript << "set style data histograms\n";
-    gnuplotScript << "set style fill solid\n";
-    gnuplotScript << "plot 'flow_stats.txt' using 5 with histogram title 'Rx Bytes', '' using 4 with histogram title 'Tx Bytes'\n";
-    gnuplotScript.close();
+    std::ofstream energyFile;
+    energyFile.open(energyStats);
     
+    for (size_t i = 0; i < nodeEnergyConsumed.size(); ++i) {
+    	double power_consumed = nodeEnergyConsumed[i] / 10;
+        energyFile << "Node " << i << ": " << power_consumed << " W" << std::endl;
+    }
+    energyFile.close();
 
   
     
