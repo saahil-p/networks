@@ -22,6 +22,8 @@
 #include "ns3/constant-velocity-mobility-model.h"
 #include "ns3/energy-module.h"
 #include "ns3/wifi-radio-energy-model-helper.h"
+#include "ns3/aodv-module.h"
+#include "ns3/three-gpp-propagation-loss-model.h"
 
 
 #include <fstream>
@@ -96,6 +98,8 @@ main(int argc, char *argv[]){
     WifiMacHelper wifiMac;
     WifiHelper wifiHelper;
     wifiHelper.SetStandard(WIFI_STANDARD_80211n);
+    
+
 
     /* Set up Legacy Channel */
     YansWifiChannelHelper wifiChannel;
@@ -114,11 +118,11 @@ main(int argc, char *argv[]){
                                        
 
     NodeContainer apWifiNode;
-    apWifiNode.Create(2);
+    apWifiNode.Create(1);
     int number_of_vehicles = 30;
     NodeContainer smartVehicleNodes;
     smartVehicleNodes.Create(number_of_vehicles);
-    
+ 
     Ssid ssid = Ssid("network");
     wifiMac.SetType("ns3::ApWifiMac", "Ssid", SsidValue(ssid));
     NetDeviceContainer apDevice;
@@ -142,13 +146,13 @@ main(int argc, char *argv[]){
     for(int i = 0; i < number_of_vehicles/2; i++){
     	Ptr<Node> node = smartVehicleNodes.Get(i);
     	Ptr<ConstantVelocityMobilityModel> mob = node->GetObject <ConstantVelocityMobilityModel>();
-    	mob->SetVelocity(Vector(1.0,0.0,0.0));
+    	mob->SetVelocity(Vector(100.0,0.0,0.0));
     }
     
     for(int i  = number_of_vehicles/2; i < number_of_vehicles; i++){
     	Ptr<Node> node = smartVehicleNodes.Get(i);
     	Ptr<ConstantVelocityMobilityModel> mob = node->GetObject <ConstantVelocityMobilityModel>();
-    	mob->SetVelocity(Vector(-1.0,0.0,0.0));
+    	mob->SetVelocity(Vector(-100.0,0.0,0.0));
     }
     
 
@@ -161,6 +165,8 @@ main(int argc, char *argv[]){
    
     
     InternetStackHelper stack;
+    AodvHelper aodv;
+    stack.SetRoutingHelper(aodv);
     stack.Install(apWifiNode);
     stack.Install(smartVehicleNodes);
     
@@ -255,10 +261,6 @@ main(int argc, char *argv[]){
     	Ptr<MobilityModel> mob = smartVehicleNodes.Get(i)->GetObject<MobilityModel>();
     	double x = mob->GetPosition().x;
     	double y = mob->GetPosition().y;
-    	if(x > 5 || y >5){
-    		smallPktServer.SetAttribute("Remote",AddressValue (InetSocketAddress (apInterface.GetAddress (0), 9)));
-    		std::cout << "Small server migrated" << std::endl;;
-    	}
     	anim.SetConstantPosition(smartVehicleNodes.Get(i),x,y);
         anim.UpdateNodeColor(smartVehicleNodes.Get(i),0,255,0);
     }
