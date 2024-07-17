@@ -51,7 +51,7 @@ CalculateThroughput()
     lastTotalRx = sink->GetTotalRx();
     Simulator::Schedule(MilliSeconds(1000), &CalculateThroughput);
 }
-void CalculateEnergyConsumption(NodeContainer temperatureSensorNodes, NodeContainer humiditySensorNodes) {
+void CalculateEnergyConsumption(NodeContainer temperatureSensorNodes, NodeContainer humiditySensorNodes,NodeContainer pressureSensorNodes,NodeContainer soundSensorNodes) {
     totalEnergyConsumed = 0.0;
 
     for (size_t i = 0; i < nodeEnergyConsumed.size(); ++i) {
@@ -73,8 +73,30 @@ void CalculateEnergyConsumption(NodeContainer temperatureSensorNodes, NodeContai
             NS_LOG_WARN("Energy source not found for humidity sensor node " << i);
         }
     }
+    
+        for (size_t i = 0; i < humiditySensorNodes.GetN(); ++i) {
+        Ptr<ns3::energy::BasicEnergySource> energySource = DynamicCast<ns3::energy::BasicEnergySource>(pressureSensorNodes.Get(i)->GetObject<ns3::energy::EnergySourceContainer>()->Get(0));
+        if (energySource) {
+            double energyConsumed = energySource->GetInitialEnergy() - energySource->GetRemainingEnergy();
+            totalEnergyConsumed += energyConsumed;
+        } else {
+            NS_LOG_WARN("Energy source not found for humidity sensor node " << i);
+        }
+    }
+    
+        for (size_t i = 0; i < humiditySensorNodes.GetN(); ++i) {
+        Ptr<ns3::energy::BasicEnergySource> energySource = DynamicCast<ns3::energy::BasicEnergySource>(soundSensorNodes.Get(i)->GetObject<ns3::energy::EnergySourceContainer>()->Get(0));
+        if (energySource) {
+            double energyConsumed = energySource->GetInitialEnergy() - energySource->GetRemainingEnergy();
+            totalEnergyConsumed += energyConsumed;
+        } else {
+            NS_LOG_WARN("Energy source not found for humidity sensor node " << i);
+        }
+    }
+    
+    
 
-    Simulator::Schedule(Seconds(1.0), &CalculateEnergyConsumption, temperatureSensorNodes, humiditySensorNodes);
+    Simulator::Schedule(Seconds(1.0), &CalculateEnergyConsumption, temperatureSensorNodes, humiditySensorNodes,pressureSensorNodes,soundSensorNodes);
 }
 
 
@@ -130,7 +152,8 @@ main(int argc, char *argv[]){
                                        
 
     NodeContainer apWifiNode;
-    apWifiNode.Create(2);
+    int number_of_ap = 4;
+    apWifiNode.Create(number_of_ap);
     int number_of_sensors = 21;
     
     NodeContainer temperatureSensorNodes;
@@ -141,6 +164,9 @@ main(int argc, char *argv[]){
     
     NodeContainer soundSensorNodes;
     soundSensorNodes.Create(10);
+    
+    NodeContainer pressureSensorNodes;
+    pressureSensorNodes.Create(10);
     
     NodeContainer attackerNode;
     attackerNode.Create(1);
@@ -165,6 +191,9 @@ main(int argc, char *argv[]){
     NetDeviceContainer soundSensorDevices;
     soundSensorDevices = wifiHelper.Install(wifiPhy,wifiMac,soundSensorNodes);
     
+    NetDeviceContainer pressureSensorDevices;
+    pressureSensorDevices = wifiHelper.Install(wifiPhy,wifiMac,pressureSensorNodes);
+    
     
     
     
@@ -174,6 +203,7 @@ main(int argc, char *argv[]){
     stack.Install(attackerNode);
     stack.Install(humiditySensorNodes);
     stack.Install(soundSensorNodes);
+    stack.Install(pressureSensorNodes);
     
     Ipv4AddressHelper address;
     address.SetBase("192.168.0.0", "255.255.0.0");
@@ -187,6 +217,9 @@ main(int argc, char *argv[]){
     humditySensorInterface = address.Assign(humiditySensorDevices);
     Ipv4InterfaceContainer soundSensorInterface;
     soundSensorInterface = address.Assign(soundSensorDevices);
+    Ipv4InterfaceContainer pressureSensorInterface;
+    pressureSensorInterface = address.Assign(pressureSensorDevices);
+    
     
     Ptr<UniformRandomVariable> x = CreateObject<UniformRandomVariable>();
     x->SetAttribute ("Min", DoubleValue (112.5));
@@ -243,6 +276,8 @@ main(int argc, char *argv[]){
     
     apPositionAlloc->Add(Vector(70.0,50.0,0.0));
     apPositionAlloc->Add(Vector(62.5,187.5,0.0));
+    apPositionAlloc->Add(Vector(161.3,55.5,0.0));
+    apPositionAlloc->Add(Vector(150.0,176.25,0.0));
     
     apMobility.SetPositionAllocator(apPositionAlloc);
     apMobility.Install(apWifiNode); 
@@ -255,6 +290,25 @@ main(int argc, char *argv[]){
 	attackerMobility.SetPositionAllocator(attackerPosAlloc);
 	attackerMobility.Install(attackerNode);
     
+    
+    MobilityHelper pressureMobility;
+    Ptr<ListPositionAllocator> pressurePosAlloc = CreateObject <ListPositionAllocator>();
+    
+    int m = 1;
+    
+    for(double i = 125; i < 250; i+=25){
+    	double y = m*i;
+    	pressurePosAlloc->Add(Vector(i,y, 0.0));
+    }
+    
+    for(double i = 125; i <250 ; i+=25){
+    	double y = (-m)*i + 350;
+    	pressurePosAlloc->Add(Vector(i,y,0.0));
+    }
+    
+    pressureMobility.SetPositionAllocator(pressurePosAlloc);
+    pressureMobility.Install(pressureSensorNodes);
+    
     Ipv4GlobalRoutingHelper::PopulateRoutingTables();
     
     PacketSinkHelper sinkHelper("ns3::TcpSocketFactory",InetSocketAddress(InetSocketAddress(Ipv4Address::GetAny(), 9)));
@@ -265,27 +319,33 @@ main(int argc, char *argv[]){
     sink = StaticCast<PacketSink>(sinkApp.Get(0));
     
     
-    OnOffHelper smallPktServer("ns3::TcpSocketFactory", (InetSocketAddress(apInterface.GetAddress(0), 9)));
-    smallPktServer.SetAttribute("PacketSize", UintegerValue(3));
-    smallPktServer.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
-    smallPktServer.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
-    smallPktServer.SetAttribute("DataRate", DataRateValue(DataRate("10Kb/s")));
-    ApplicationContainer smallPktServerApp = smallPktServer.Install(temperatureSensorNodes);
+    OnOffHelper temperaturePktServer("ns3::TcpSocketFactory", (InetSocketAddress(apInterface.GetAddress(0), 9)));
+    temperaturePktServer.SetAttribute("PacketSize", UintegerValue(3));
+    temperaturePktServer.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
+    temperaturePktServer.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
+    temperaturePktServer.SetAttribute("DataRate", DataRateValue(DataRate("10Kb/s")));
+    ApplicationContainer temperaturePktServerApp = temperaturePktServer.Install(temperatureSensorNodes);
     
-    OnOffHelper midPktServer("ns3::TcpSocketFactory", (InetSocketAddress(apInterface.GetAddress(1), 9)));
-    midPktServer.SetAttribute("PacketSize", UintegerValue(2));
-    midPktServer.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
-    midPktServer.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
-    midPktServer.SetAttribute("DataRate", DataRateValue(DataRate("10Kb/s")));
-    ApplicationContainer midPktServerApp = midPktServer.Install(humiditySensorNodes);
+    OnOffHelper humidityPktServer("ns3::TcpSocketFactory", (InetSocketAddress(apInterface.GetAddress(1), 9)));
+    humidityPktServer.SetAttribute("PacketSize", UintegerValue(2));
+    humidityPktServer.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
+    humidityPktServer.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
+    humidityPktServer.SetAttribute("DataRate", DataRateValue(DataRate("10Kb/s")));
+    ApplicationContainer humidityPktServerApp = humidityPktServer.Install(humiditySensorNodes);
     
-    OnOffHelper largePktServer("ns3::TcpSocketFactory", (InetSocketAddress(apInterface.GetAddress(0), 9)));
-    largePktServer.SetAttribute("PacketSize", UintegerValue(5));
-    largePktServer.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
-    largePktServer.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=2]"));
-    largePktServer.SetAttribute("DataRate", DataRateValue(DataRate("20Kb/s")));
-    ApplicationContainer largePktServerApp = largePktServer.Install(soundSensorNodes);
+    OnOffHelper pressurePktServer("ns3::TcpSocketFactory", (InetSocketAddress(apInterface.GetAddress(2), 9)));
+    pressurePktServer.SetAttribute("PacketSize", UintegerValue(5));
+    pressurePktServer.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
+    pressurePktServer.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=2]"));
+    pressurePktServer.SetAttribute("DataRate", DataRateValue(DataRate("20Kb/s")));
+    ApplicationContainer pressurePktServerApp = pressurePktServer.Install(pressureSensorNodes);
     
+    OnOffHelper soundPktServer("ns3::TcpSocketFactory", (InetSocketAddress(apInterface.GetAddress(2), 9)));
+    soundPktServer.SetAttribute("PacketSize", UintegerValue(5));
+    soundPktServer.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
+    soundPktServer.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=2]"));
+    soundPktServer.SetAttribute("DataRate", DataRateValue(DataRate("20Kb/s")));
+    ApplicationContainer soundPktServerApp = soundPktServer.Install(soundSensorNodes);
     
     OnOffHelper tcpDOS("ns3::TcpSocketFactory",(InetSocketAddress(apInterface.GetAddress(0),9)));
     tcpDOS.SetAttribute("PacketSize",UintegerValue(43)); /*Replace ENTER_PAYLOAD_SIZE_IN_BYTES_HERE with the avg payload size for DOS attacks*/
@@ -309,7 +369,7 @@ main(int argc, char *argv[]){
     throughputFile.open(throughputFileName);
     AnimationInterface anim("visual.xml");
    
-    for(int i = 0; i < 2; i++){
+    for(int i = 0; i < number_of_ap; i++){
     Ptr<MobilityModel> apmob = apWifiNode.Get(i)->GetObject<MobilityModel>();
     double apx = apmob->GetPosition().x;
     double apy = apmob->GetPosition().y;
@@ -329,10 +389,11 @@ main(int argc, char *argv[]){
     
     
     sinkApp.Start(Seconds(0.0));
-    smallPktServerApp.Start(Seconds(1.1));
-    midPktServerApp.Start(Seconds(1.2));
-    largePktServerApp.Start(Seconds(1.3));
-    tcpDOSApp.Start(Seconds(1.0));
+    temperaturePktServerApp.Start(Seconds(1.1));
+    humidityPktServerApp.Start(Seconds(1.2));
+    soundPktServerApp.Start(Seconds(1.3));
+    pressurePktServerApp.Start(Seconds(1.4));
+   // tcpDOSApp.Start(Seconds(1.0));
     
     BasicEnergySourceHelper basicSourceHelper;
     basicSourceHelper.Set("BasicEnergySourceInitialEnergyJ", DoubleValue(1000.0));
@@ -348,12 +409,18 @@ main(int argc, char *argv[]){
     ns3::energy::EnergySourceContainer sources = basicSourceHelper.Install(temperatureSensorNodes);
     ns3::energy::DeviceEnergyModelContainer deviceModels = radioEnergyHelper.Install(temperatureSensorDevices, sources);
     
-    ns3::energy::EnergySourceContainer srcs = basicSourceHelper.Install(humiditySensorNodes);
-    ns3::energy::DeviceEnergyModelContainer devModels = radioEnergyHelper.Install(humiditySensorDevices,srcs);
+    ns3::energy::EnergySourceContainer srcs_h = basicSourceHelper.Install(humiditySensorNodes);
+    ns3::energy::DeviceEnergyModelContainer devModels_h = radioEnergyHelper.Install(humiditySensorDevices,srcs_h);
+    
+    ns3::energy::EnergySourceContainer srcs_s = basicSourceHelper.Install(soundSensorNodes);
+    ns3::energy::DeviceEnergyModelContainer devModels_s = radioEnergyHelper.Install(soundSensorDevices,srcs_s);
+    
+    ns3::energy::EnergySourceContainer srcs_p = basicSourceHelper.Install(pressureSensorNodes);
+    ns3::energy::DeviceEnergyModelContainer devModels_p = radioEnergyHelper.Install(pressureSensorDevices,srcs_p);
 
     nodeEnergyConsumed.resize(temperatureSensorNodes.GetN(), 0.0);
 
-    Simulator::Schedule(Seconds(1.0), &CalculateEnergyConsumption,temperatureSensorNodes,humiditySensorNodes);
+    Simulator::Schedule(Seconds(1.0), &CalculateEnergyConsumption,temperatureSensorNodes,humiditySensorNodes,pressureSensorNodes,soundSensorNodes);
    
     
     Simulator::Schedule(Seconds(1.1), &CalculateThroughput);
@@ -375,6 +442,15 @@ main(int argc, char *argv[]){
     	anim.SetConstantPosition(temperatureSensorNodes.Get(i),x,y);
         anim.UpdateNodeColor(temperatureSensorNodes.Get(i),100,100,10);
     }
+    for(int i = 0; i < 10; i++){
+    	Ptr<MobilityModel> mob = pressureSensorNodes.Get(i)->GetObject<MobilityModel>();
+    	double x = mob->GetPosition().x;
+    	double y = mob->GetPosition().y;
+    	anim.SetConstantPosition(temperatureSensorNodes.Get(i),x,y);
+        anim.UpdateNodeColor(pressureSensorNodes.Get(i),25,50,75);
+    }
+    
+   
     
     
     Simulator::Stop(simulationTime);
