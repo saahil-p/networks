@@ -48,17 +48,15 @@ void
 CalculateThroughput()
 {
     Time now = Simulator::Now(); /* Return the simulator's virtual time. */
-    double cur = (sink->GetTotalRx() - lastTotalRx + sink2->GetTotalRx()-lastTotalRx2 + sink3->GetTotalRx() - lastTotalRx3) * 8.0 /1e6; /* Convert Application RX Packets to MBits. */
+    double cur = (sink->GetTotalRx() - lastTotalRx) * 8.0 /1e6; /* Convert Application RX Packets to MBits. */
                 
     throughputFile << now.GetSeconds() << "\t" << cur << std::endl;
     
 
     lastTotalRx = sink->GetTotalRx();
-    lastTotalRx2 = sink2->GetTotalRx();
-    lastTotalRx3 = sink3->GetTotalRx();
     Simulator::Schedule(MilliSeconds(1000), &CalculateThroughput);
 }
-void CalculateEnergyConsumption(NodeContainer smartVehicleNodes,NodeContainer smartVehicleNodes2, NodeContainer smartVehicleNodes3) {
+void CalculateEnergyConsumption(NodeContainer smartVehicleNodes) {
     totalEnergyConsumed = 0.0;
     for (size_t i = 0; i < nodeEnergyConsumed.size(); ++i) {
         Ptr<ns3::energy::BasicEnergySource> energySource = DynamicCast<ns3::energy::BasicEnergySource>(smartVehicleNodes.Get(i)->GetObject<ns3::energy::EnergySourceContainer>()->Get(0));
@@ -69,7 +67,7 @@ void CalculateEnergyConsumption(NodeContainer smartVehicleNodes,NodeContainer sm
             NS_LOG_WARN("Energy source not found for node " << i);
         }
     }
-
+/*
     for (size_t i = 0; i < smartVehicleNodes2.GetN(); ++i) {
         Ptr<ns3::energy::BasicEnergySource> energySource = DynamicCast<ns3::energy::BasicEnergySource>(smartVehicleNodes2.Get(i)->GetObject<ns3::energy::EnergySourceContainer>()->Get(0));
         if (energySource) {
@@ -89,7 +87,8 @@ void CalculateEnergyConsumption(NodeContainer smartVehicleNodes,NodeContainer sm
             NS_LOG_WARN("Energy source not found for humidity sensor node " << i);
         }
     }
-    Simulator::Schedule(Seconds(1.0), &CalculateEnergyConsumption, smartVehicleNodes, smartVehicleNodes2, smartVehicleNodes3);
+*/
+    Simulator::Schedule(Seconds(1.0), &CalculateEnergyConsumption, smartVehicleNodes);
 }
 
 void setVehicleMobility(NodeContainer smartVehicleNodes, double minx, double miny,double speedx,double speedy, std::string row_col, double delx, double dely){
@@ -169,16 +168,13 @@ main(int argc, char *argv[]){
                                        
 
     NodeContainer apWifiNode;
-    apWifiNode.Create(3);
+    apWifiNode.Create(1);
+    
+    NodeContainer sinkNodes;
+    sinkNodes.Create(1);
 
     NodeContainer smartVehicleNodes;
     smartVehicleNodes.Create(number_of_vehicles);
-
-    NodeContainer smartVehicleNodes2;
-    smartVehicleNodes2.Create(number_of_vehicles);
-
-    NodeContainer smartVehicleNodes3;
-    smartVehicleNodes3.Create(number_of_vehicles);
  
     Ssid ssid = Ssid("network");
 
@@ -191,63 +187,55 @@ main(int argc, char *argv[]){
     
     NetDeviceContainer smartVehicleDevices;
     smartVehicleDevices = wifiHelper.Install(wifiPhy,wifiMac,smartVehicleNodes);
-
-    NetDeviceContainer smartVehicleDevices2;
-    smartVehicleDevices2 = wifiHelper.Install(wifiPhy,wifiMac,smartVehicleNodes2);
-
-    NetDeviceContainer smartVehicleDevices3;
-    smartVehicleDevices3 = wifiHelper.Install(wifiPhy,wifiMac,smartVehicleNodes3);
     
-
+    NetDeviceContainer sinkDevices;
+    sinkDevices = wifiHelper.Install(wifiPhy,wifiMac,sinkNodes);
     
     MobilityHelper apMobility;
     Ptr<ListPositionAllocator> apPositionAlloc = CreateObject<ListPositionAllocator>();
     apPositionAlloc->Add(Vector(0.0,10.0,0.0));
-    apPositionAlloc->Add(Vector(0.0,610.0,0.0));
-    apPositionAlloc->Add(Vector(610.0,200.0,0.0));
     apMobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
     apMobility.SetPositionAllocator(apPositionAlloc);
     apMobility.Install(apWifiNode);
     
+    MobilityHelper sinkMobility;
+    Ptr<ListPositionAllocator> sinkPositionAlloc = CreateObject<ListPositionAllocator>();
+    sinkPositionAlloc->Add(Vector(10.0,10.0,0.0));
+    sinkMobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+    sinkMobility.SetPositionAllocator(sinkPositionAlloc);
+    sinkMobility.Install(sinkNodes);
+    
     setVehicleMobility(smartVehicleNodes,0.0,0.0,1.0,0.0, "RowFirst", 20.0, 10.0);
-    setVehicleMobility(smartVehicleNodes2,0.0,600.0,1.0,0.0, "RowFirst", 20.0, 10.0);
-    setVehicleMobility(smartVehicleNodes3,600,200.0,0.0,1.0, "ColumnFirst", 10.0, 20.0);
-   
+     
     AodvHelper aodv;
     InternetStackHelper stack;
     stack.SetRoutingHelper(aodv);
+    stack.Install(sinkNodes);
     stack.Install(apWifiNode);
     stack.Install(smartVehicleNodes);
-    stack.Install(smartVehicleNodes2);
-    stack.Install(smartVehicleNodes3);
-    
-  
     
     Ipv4AddressHelper address;
     address.SetBase("192.168.0.0", "255.255.0.0");
     Ipv4InterfaceContainer apInterface;
     apInterface = address.Assign(apDevice);
+    Ipv4InterfaceContainer sinkInterface;
+    sinkInterface = address.Assign(sinkDevices);
     Ipv4InterfaceContainer smartVehicleInterface;
-    smartVehicleInterface = address.Assign(smartVehicleDevices);
-    Ipv4InterfaceContainer smartVehicleInterface2;
-    smartVehicleInterface2 = address.Assign(smartVehicleDevices2);
-    Ipv4InterfaceContainer smartVehicleInterface3;
-    smartVehicleInterface3 = address.Assign(smartVehicleDevices3);
-    
+    smartVehicleInterface = address.Assign(smartVehicleDevices); 
     
 
     Ipv4GlobalRoutingHelper::PopulateRoutingTables();
     
     PacketSinkHelper sinkHelper("ns3::TcpSocketFactory",InetSocketAddress(InetSocketAddress(Ipv4Address::GetAny(), 9)));
-    ApplicationContainer sinkApp = sinkHelper.Install(apWifiNode.Get(0));
+    ApplicationContainer sinkApp = sinkHelper.Install(sinkNodes.Get(0));
     sink = StaticCast<PacketSink>(sinkApp.Get(0));
-    ApplicationContainer sinkApp2 = sinkHelper.Install(apWifiNode.Get(1));
+    /*ApplicationContainer sinkApp2 = sinkHelper.Install(apWifiNode.Get(1));
     sink2 = StaticCast<PacketSink>(sinkApp2.Get(0));
     ApplicationContainer sinkApp3 = sinkHelper.Install(apWifiNode.Get(2));
     sink3 = StaticCast<PacketSink>(sinkApp3.Get(0));
-
+*/
     //cluster1 
-    OnOffHelper smallPktServer("ns3::TcpSocketFactory", (InetSocketAddress(apInterface.GetAddress(0), 9)));
+    OnOffHelper smallPktServer("ns3::TcpSocketFactory", (InetSocketAddress(sinkInterface.GetAddress(0), 9)));
     smallPktServer.SetAttribute("PacketSize", UintegerValue(100));
     smallPktServer.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
     smallPktServer.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
@@ -255,7 +243,7 @@ main(int argc, char *argv[]){
     ApplicationContainer smallPktServerApp = smallPktServer.Install(smartVehicleNodes);
 
     
-    OnOffHelper midPktServer("ns3::TcpSocketFactory", (InetSocketAddress(apInterface.GetAddress(0), 9)));
+    OnOffHelper midPktServer("ns3::TcpSocketFactory", (InetSocketAddress(sinkInterface.GetAddress(0), 9)));
     midPktServer.SetAttribute("PacketSize", UintegerValue(200));
     midPktServer.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
     midPktServer.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=10]"));
@@ -263,58 +251,12 @@ main(int argc, char *argv[]){
     ApplicationContainer midPktServerApp = midPktServer.Install(smartVehicleNodes);
 
     
-    OnOffHelper largePktServer("ns3::TcpSocketFactory", (InetSocketAddress(apInterface.GetAddress(0), 9)));
+    OnOffHelper largePktServer("ns3::TcpSocketFactory", (InetSocketAddress(sinkInterface.GetAddress(0), 9)));
     largePktServer.SetAttribute("PacketSize", UintegerValue(3000));
     largePktServer.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
     largePktServer.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=25]"));
     largePktServer.SetAttribute("DataRate", DataRateValue(DataRate("100Mb/s")));
     ApplicationContainer largePktServerApp = largePktServer.Install(smartVehicleNodes);
-
-    //cluster 2 
-    OnOffHelper smallPktServer2("ns3::TcpSocketFactory", (InetSocketAddress(apInterface.GetAddress(1), 9)));
-    smallPktServer2.SetAttribute("PacketSize", UintegerValue(100));
-    smallPktServer2.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
-    smallPktServer2.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
-    smallPktServer2.SetAttribute("DataRate", DataRateValue(DataRate("100Kb/s")));
-    ApplicationContainer smallPktServerApp2 = smallPktServer2.Install(smartVehicleNodes2);
-    
-    OnOffHelper midPktServer2("ns3::TcpSocketFactory", (InetSocketAddress(apInterface.GetAddress(1), 9)));
-    midPktServer2.SetAttribute("PacketSize", UintegerValue(200));
-    midPktServer2.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
-    midPktServer2.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=10]"));
-    midPktServer2.SetAttribute("DataRate", DataRateValue(DataRate("2Mb/s")));
-    ApplicationContainer midPktServerApp2 = midPktServer2.Install(smartVehicleNodes2);
-    
-    OnOffHelper largePktServer2("ns3::TcpSocketFactory", (InetSocketAddress(apInterface.GetAddress(1), 9)));
-    largePktServer2.SetAttribute("PacketSize", UintegerValue(3000));
-    largePktServer2.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
-    largePktServer2.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=25]"));
-    largePktServer2.SetAttribute("DataRate", DataRateValue(DataRate("100Mb/s")));
-    ApplicationContainer largePktServerApp2 = largePktServer2.Install(smartVehicleNodes2);
-
-    //cluster 3 
-    OnOffHelper smallPktServer3("ns3::TcpSocketFactory", (InetSocketAddress(apInterface.GetAddress(2), 9)));
-    smallPktServer3.SetAttribute("PacketSize", UintegerValue(100));
-    smallPktServer3.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
-    smallPktServer3.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
-    smallPktServer3.SetAttribute("DataRate", DataRateValue(DataRate("100Kb/s")));
-    ApplicationContainer smallPktServerApp3 = smallPktServer3.Install(smartVehicleNodes3);
-    
-    OnOffHelper midPktServer3("ns3::TcpSocketFactory", (InetSocketAddress(apInterface.GetAddress(2), 9)));
-    midPktServer3.SetAttribute("PacketSize", UintegerValue(200));
-    midPktServer3.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
-    midPktServer3.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=10]"));
-    midPktServer3.SetAttribute("DataRate", DataRateValue(DataRate("2Mb/s")));
-    ApplicationContainer midPktServerApp3 = midPktServer3.Install(smartVehicleNodes3);
-    
-    OnOffHelper largePktServer3("ns3::TcpSocketFactory", (InetSocketAddress(apInterface.GetAddress(2), 9)));
-    largePktServer3.SetAttribute("PacketSize", UintegerValue(3000));
-    largePktServer3.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
-    largePktServer3.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=25]"));
-    largePktServer3.SetAttribute("DataRate", DataRateValue(DataRate("100Mb/s")));
-    ApplicationContainer largePktServerApp3 = largePktServer2.Install(smartVehicleNodes3);
-    
-    
     
     FlowMonitorHelper flowmon;
     Ptr<FlowMonitor> monitor = flowmon.InstallAll();
@@ -330,23 +272,23 @@ main(int argc, char *argv[]){
     double apx = apmob->GetPosition().x;
     double apy = apmob->GetPosition().y;
     
+    
     anim.SetConstantPosition(apWifiNode.Get(0),apx,apy);
     anim.UpdateNodeColor(apWifiNode.Get(0),0,0,255);
-    anim.UpdateNodeColor(apWifiNode.Get(1),0,0,255);
-    anim.UpdateNodeColor(apWifiNode.Get(2),0,0,255);
+
+    Ptr<MobilityModel> sinkMob = sinkNodes.Get(0)->GetObject<MobilityModel>();
+    double sink_x = sinkMob->GetPosition().x;
+    double sink_y = sinkMob->GetPosition().y;
+    anim.SetConstantPosition(sinkNodes.Get(0),sink_x,sink_y);
+    anim.UpdateNodeColor(sinkNodes.Get(0),100,100,100);
     
     
     sinkApp.Start(Seconds(0.0));
-    sinkApp2.Start(Seconds(0.0));
+
+
     smallPktServerApp.Start(Seconds(1.1));
     midPktServerApp.Start(Seconds(1.2));
     largePktServerApp.Start(Seconds(1.3));
-    smallPktServerApp2.Start(Seconds(1.1));
-    midPktServerApp2.Start(Seconds(1.1));
-    largePktServerApp2.Start(Seconds(1.1));
-    smallPktServerApp3.Start(Seconds(1.1));
-    midPktServerApp3.Start(Seconds(1.1));
-    largePktServerApp3.Start(Seconds(1.1));
     
     BasicEnergySourceHelper basicSourceHelper;
     basicSourceHelper.Set("BasicEnergySourceInitialEnergyJ", DoubleValue(1000.0));
@@ -362,17 +304,9 @@ main(int argc, char *argv[]){
     ns3::energy::EnergySourceContainer sources = basicSourceHelper.Install(smartVehicleNodes);
     ns3::energy::DeviceEnergyModelContainer deviceModels = radioEnergyHelper.Install(smartVehicleDevices, sources);
 
-
-    ns3::energy::EnergySourceContainer sources2 = basicSourceHelper.Install(smartVehicleNodes2);
-    ns3::energy::DeviceEnergyModelContainer deviceModels2 = radioEnergyHelper.Install(smartVehicleDevices2, sources2);
-
-
-    ns3::energy::EnergySourceContainer sources3 = basicSourceHelper.Install(smartVehicleNodes3);
-    ns3::energy::DeviceEnergyModelContainer deviceModels3 = radioEnergyHelper.Install(smartVehicleDevices3, sources3);
-
     nodeEnergyConsumed.resize(smartVehicleNodes.GetN(), 0.0);
 
-    Simulator::Schedule(Seconds(1.0), &CalculateEnergyConsumption, smartVehicleNodes, smartVehicleNodes2, smartVehicleNodes3);
+    Simulator::Schedule(Seconds(1.0), &CalculateEnergyConsumption, smartVehicleNodes);
    
     
     Simulator::Schedule(Seconds(1.1), &CalculateThroughput);
@@ -385,17 +319,6 @@ main(int argc, char *argv[]){
     	double y1 = mob->GetPosition().y;
     	anim.SetConstantPosition(smartVehicleNodes.Get(i),x1,y1);
         anim.UpdateNodeColor(smartVehicleNodes.Get(i),0,255,0);
-
-        double x2 = mob->GetPosition().x;
-    	double y2 = mob->GetPosition().y;
-    	anim.SetConstantPosition(smartVehicleNodes2.Get(i),x2,y2);
-        anim.UpdateNodeColor(smartVehicleNodes2.Get(i),0,255,0);
-
-        double x3 = mob->GetPosition().x;
-    	double y3 = mob->GetPosition().y;
-    	anim.SetConstantPosition(smartVehicleNodes3.Get(i),x3,y3);
-        anim.UpdateNodeColor(smartVehicleNodes3.Get(i),0,255,0);
-
     }
     
     
