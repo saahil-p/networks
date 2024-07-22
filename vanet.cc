@@ -33,15 +33,14 @@ NS_LOG_COMPONENT_DEFINE("proj");
 using namespace ns3;
 
 Ptr<PacketSink> sink;
-Ptr<PacketSink> sink2;
-Ptr<PacketSink> sink3;
 uint64_t lastTotalRx = 0;
-uint64_t lastTotalRx2 = 0;
-uint64_t lastTotalRx3 = 0;
 std::ofstream throughputFile;
 double totalEnergyConsumed = 0.0;
 std::vector<double> nodeEnergyConsumed;
-int number_of_vehicles = 30;
+int number_of_vehicles = 32;
+int sink_count= 1;
+
+std::string fileName = "_32_1.txt";
 
 
 void
@@ -67,52 +66,72 @@ void CalculateEnergyConsumption(NodeContainer smartVehicleNodes) {
             NS_LOG_WARN("Energy source not found for node " << i);
         }
     }
-/*
-    for (size_t i = 0; i < smartVehicleNodes2.GetN(); ++i) {
-        Ptr<ns3::energy::BasicEnergySource> energySource = DynamicCast<ns3::energy::BasicEnergySource>(smartVehicleNodes2.Get(i)->GetObject<ns3::energy::EnergySourceContainer>()->Get(0));
-        if (energySource) {
-            double energyConsumed = energySource->GetInitialEnergy() - energySource->GetRemainingEnergy();
-            totalEnergyConsumed += energyConsumed;
-        } else {
-            NS_LOG_WARN("Energy source not found for humidity sensor node " << i);
-        }
-    }
-
-    for (size_t i = 0; i < smartVehicleNodes3.GetN(); ++i) {
-        Ptr<ns3::energy::BasicEnergySource> energySource = DynamicCast<ns3::energy::BasicEnergySource>(smartVehicleNodes3.Get(i)->GetObject<ns3::energy::EnergySourceContainer>()->Get(0));
-        if (energySource) {
-            double energyConsumed = energySource->GetInitialEnergy() - energySource->GetRemainingEnergy();
-            totalEnergyConsumed += energyConsumed;
-        } else {
-            NS_LOG_WARN("Energy source not found for humidity sensor node " << i);
-        }
-    }
-*/
     Simulator::Schedule(Seconds(1.0), &CalculateEnergyConsumption, smartVehicleNodes);
 }
 
-void setVehicleMobility(NodeContainer smartVehicleNodes, double minx, double miny,double speedx,double speedy, std::string row_col, double delx, double dely){
-    MobilityHelper smartVehicleMobility;
-    
-    smartVehicleMobility.SetMobilityModel("ns3::ConstantVelocityMobilityModel");
-    
-    smartVehicleMobility.SetPositionAllocator("ns3::GridPositionAllocator","MinX",DoubleValue(minx),
-    "MinY",DoubleValue(miny),"DeltaX",DoubleValue(20.0),"DeltaY",DoubleValue(20.0),"GridWidth",UintegerValue(15),
-    "LayoutType",StringValue(row_col));
-    
-    
-    smartVehicleMobility.Install(smartVehicleNodes);
-    for(int i = 0; i < number_of_vehicles/2; i++){
-    	Ptr<Node> node = smartVehicleNodes.Get(i);
-    	Ptr<ConstantVelocityMobilityModel> mob = node->GetObject <ConstantVelocityMobilityModel>();
-    	mob->SetVelocity(Vector(speedx,speedy,0.0));
+void setVehicleMobility(NodeContainer smartVehicleNodes, double minx, double miny,double speedx,double speedy, double delx, double dely){
+ MobilityHelper smartVehicleMobility1;
+MobilityHelper smartVehicleMobility2;
+
+
+    NodeContainer rowFirstNodes;
+    NodeContainer columnFirstNodes;
+    for (int i = 0; i < number_of_vehicles / 2; ++i) {
+        rowFirstNodes.Add(smartVehicleNodes.Get(i));
     }
-    
-    for(int i  = number_of_vehicles/2; i < number_of_vehicles; i++){
-    	Ptr<Node> node = smartVehicleNodes.Get(i);
-    	Ptr<ConstantVelocityMobilityModel> mob = node->GetObject <ConstantVelocityMobilityModel>();
-    	mob->SetVelocity(Vector(-speedx,speedy,0.0));
+    for (int i = number_of_vehicles / 2; i < number_of_vehicles; ++i) {
+        columnFirstNodes.Add(smartVehicleNodes.Get(i));
     }
+
+// First half with RowFirst layout
+smartVehicleMobility1.SetMobilityModel("ns3::ConstantVelocityMobilityModel");
+smartVehicleMobility1.SetPositionAllocator("ns3::GridPositionAllocator",
+                                           "MinX", DoubleValue(minx),
+                                           "MinY", DoubleValue(miny),
+                                           "DeltaX", DoubleValue(20.0),
+                                           "DeltaY", DoubleValue(20.0),
+                                           "GridWidth", UintegerValue(8),
+                                           "LayoutType", StringValue("RowFirst"));
+
+// Second half with ColumnFirst layout
+smartVehicleMobility2.SetMobilityModel("ns3::ConstantVelocityMobilityModel");
+smartVehicleMobility2.SetPositionAllocator("ns3::GridPositionAllocator",
+                                           "MinX", DoubleValue(minx),
+                                           "MinY", DoubleValue(miny),
+                                           "DeltaX", DoubleValue(20.0),
+                                           "DeltaY", DoubleValue(20.0),
+                                           "GridWidth", UintegerValue(8),
+                                           "LayoutType", StringValue("ColumnFirst"));
+
+// Install the mobility models
+smartVehicleMobility1.Install(rowFirstNodes);
+smartVehicleMobility2.Install(columnFirstNodes);
+
+
+// Assign velocities
+for (int i = 0; i < number_of_vehicles / 4; i++) {
+    Ptr<Node> node = smartVehicleNodes.Get(i);
+    Ptr<ConstantVelocityMobilityModel> mob = node->GetObject<ConstantVelocityMobilityModel>();
+    mob->SetVelocity(Vector(speedx, speedy, 0.0));
+}
+
+for (int i = number_of_vehicles / 4; i < number_of_vehicles/2; i++) {
+    Ptr<Node> node = smartVehicleNodes.Get(i);
+    Ptr<ConstantVelocityMobilityModel> mob = node->GetObject<ConstantVelocityMobilityModel>();
+    mob->SetVelocity(Vector(-speedx, speedy, 0.0));
+}
+for (int i = number_of_vehicles/2; i < 3 *number_of_vehicles / 4; i++) {
+    Ptr<Node> node = smartVehicleNodes.Get(i);
+    Ptr<ConstantVelocityMobilityModel> mob = node->GetObject<ConstantVelocityMobilityModel>();
+    mob->SetVelocity(Vector(speedy, speedx, 0.0));
+}
+
+for (int i = 3*number_of_vehicles / 4; i < number_of_vehicles; i++) {
+    Ptr<Node> node = smartVehicleNodes.Get(i);
+    Ptr<ConstantVelocityMobilityModel> mob = node->GetObject<ConstantVelocityMobilityModel>();
+    mob->SetVelocity(Vector(speedy, -speedx, 0.0));
+}
+
 }
 
 
@@ -120,7 +139,7 @@ int
 main(int argc, char *argv[]){
     std::string tcpVariant{"TcpLedbat"}; /* TCP variant type. */
     std::string phyRate{"HtMcs7"};        /* Physical layer bitrate. */
-    Time simulationTime{"200s"};           /* Simulation time. */
+    Time simulationTime{"300s"};           /* Simulation time. */
 
     /* Command line argument parser setup. */
     CommandLine cmd(__FILE__);
@@ -154,7 +173,12 @@ main(int argc, char *argv[]){
     /* Set up Legacy Channel */
     YansWifiChannelHelper wifiChannel;
     wifiChannel.SetPropagationDelay("ns3::ConstantSpeedPropagationDelayModel");
-    wifiChannel.AddPropagationLoss("ns3::FriisPropagationLossModel", "Frequency", DoubleValue(5e9));
+
+    wifiChannel.AddPropagationLoss ("ns3::NakagamiPropagationLossModel", "m0", DoubleValue (1.5),
+                                    "m1", DoubleValue (1.0),
+                                    "m2", DoubleValue (0.75),
+                                    "Distance1", DoubleValue (100.0),
+                                    "Distance2", DoubleValue (300.0));
 
     /* Setup Physical Layer */
     YansWifiPhyHelper wifiPhy;
@@ -171,7 +195,7 @@ main(int argc, char *argv[]){
     apWifiNode.Create(1);
     
     NodeContainer sinkNodes;
-    sinkNodes.Create(1);
+    sinkNodes.Create(sink_count);
 
     NodeContainer smartVehicleNodes;
     smartVehicleNodes.Create(number_of_vehicles);
@@ -205,7 +229,7 @@ main(int argc, char *argv[]){
     sinkMobility.SetPositionAllocator(sinkPositionAlloc);
     sinkMobility.Install(sinkNodes);
     
-    setVehicleMobility(smartVehicleNodes,0.0,0.0,1.0,0.0, "RowFirst", 20.0, 10.0);
+    setVehicleMobility(smartVehicleNodes,0.0,0.0,1.0,0.0, 20.0, 10.0);
      
     AodvHelper aodv;
     InternetStackHelper stack;
@@ -261,7 +285,7 @@ main(int argc, char *argv[]){
     FlowMonitorHelper flowmon;
     Ptr<FlowMonitor> monitor = flowmon.InstallAll();
     
-    std :: string throughputFileName = "throughput/throughput_" + tcpName + std:: string {".txt"};
+    std :: string throughputFileName = "throughput/throughput_" + tcpName + fileName;
     
     throughputFile.open(throughputFileName);
     AnimationInterface anim("proj_netanim.xml");
@@ -342,12 +366,13 @@ main(int argc, char *argv[]){
 
     std::ofstream flowStatsFile;
     
-    std::string flowFileName = "flowstats/flow_stats_" + tcpName + ".txt";
+    std::string flowFileName = "flowstats/flow_stats_" + tcpName +fileName;
      
     flowStatsFile.open(flowFileName);
     
     int total_tx = 0;
     int total_rx = 0;
+    double delaySum = 0;
     
     // Print Flow Monitor statistics for flows terminating at the sink
     for (std::map<FlowId, FlowMonitor::FlowStats>::const_iterator i = stats.begin (); i != stats.end (); ++i)
@@ -357,6 +382,7 @@ main(int argc, char *argv[]){
         {
             total_tx+= i->second.txPackets;
             total_rx+= i->second.rxPackets;
+            delaySum +=  i->second.timeLastRxPacket.GetSeconds()-i->second.timeFirstTxPacket.GetSeconds();
             flowStatsFile << i->first << "\t"
                           << t.sourceAddress << "\t"
                           << t.destinationAddress << "\t"
@@ -365,13 +391,30 @@ main(int argc, char *argv[]){
                           << i->second.txPackets << "\t"
                           << i->second.rxPackets << "\t"
                           << i->second.lostPackets << "\t"
-                          << i->second.rxBytes * 8.0 / (i->second.timeLastRxPacket.GetSeconds() - i->second.timeFirstTxPacket.GetSeconds()) / 1024 / 1024 << std::endl;
+                          << i->second.rxBytes * 8.0 / (i->second.timeLastRxPacket.GetSeconds() - i->second.timeFirstTxPacket.GetSeconds()) / 1024 / 1024<< std::endl;
+            
        
         }
     }
     
+    
+    
 
     flowStatsFile.close();
+    
+    std::ofstream delayFile;
+    
+    delayFile.open("flowstats/delay.txt",std::ios::app);
+    
+    delayFile << tcpName << "\t" << delaySum << std::endl;
+    
+    delayFile.close();
+    
+    std::ofstream tpFile;
+    tpFile.open("throughput/avg.txt",std::ios::app);
+    tpFile << averageThroughput << std::endl;
+    
+    tpFile.close();
     
     std ::ofstream pktStatsFile;
     
@@ -388,10 +431,15 @@ main(int argc, char *argv[]){
     std::ofstream energyFile;
     energyFile.open(energyStats);
     
+    double avg_energy_sum = 0;
     for (size_t i = 0; i < nodeEnergyConsumed.size(); ++i) {
-    	double power_consumed = nodeEnergyConsumed[i] / 10;
-        energyFile << "Node " << i << ": " << power_consumed << " W" << std::endl;
+    	double power_consumed = nodeEnergyConsumed[i] / 300;
+    	
+    	avg_energy_sum += power_consumed;
+        //energyFile << "Node " << i << ": " << power_consumed << " W" << std::endl;
     }
+    
+    energyFile << tcpName << "\t" << number_of_vehicles << "\t" << sink_count << "\t" << avg_energy_sum << std::endl; 
     energyFile.close();
 
   
