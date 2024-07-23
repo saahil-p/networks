@@ -1,0 +1,6 @@
+TcpHybla	15	1	37.6036
+TcpHybla	30	1	59.2404
+TcpHybla	45	1	76.1233
+TcpHybla	60	1	87.7618
+TcpHybla	75	1	156.606
+TcpHybla	90	1	145.112
