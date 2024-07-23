@@ -1,0 +1,6 @@
+15 TcpHybla 3.67406
+30 TcpHybla 6.56859
+45 TcpHybla 8.40898
+60 TcpHybla 8.75026
+75 TcpHybla 7.68198
+90 TcpHybla 6.52162
